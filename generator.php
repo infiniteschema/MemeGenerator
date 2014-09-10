@@ -4,7 +4,6 @@ class MemeGenerator {
 
   private $upperText;
   private $lowerText;
-  private $alignment;
   private $background;
   private $font = 'impact.ttf';
   private $im;
@@ -59,7 +58,7 @@ class MemeGenerator {
     $this->im = $this->ReturnImageFromPath($path);
     $this->imgSize = getimagesize($path);
 
-    $this->background = imagecolorallocate($this->im, 255, 255, 255);
+    $this->background = imagecolorallocate($this->im, rand(0, 255), rand(0, 255), rand(0, 255));
     imagecolortransparent($this->im, $this->background);
   }
 
@@ -149,7 +148,7 @@ class MemeGenerator {
     return $finalOutput;
   }
 
-  public function processImg() {
+  public function processImg($imgOut = "abc.jpg") {
     if ($this->lowerText != "") {
       $this->WorkOnImage($this->lowerText, 30, "lower");
     }
@@ -157,16 +156,22 @@ class MemeGenerator {
     if ($this->upperText != "") {
       $this->WorkOnImage($this->upperText, 30, "upper");
     }
-    imagejpeg($this->im, "abc.jpg");
+    imagejpeg($this->im, $imgOut);
     imagedestroy($this->im);
 
-    echo "abc.jpg";
+    echo $imgOut . "?t=" . time();
   }
 
 }
 
-$obj = new MemeGenerator('testing.jpg');
+$imgIn = $_GET['img'] ? $_GET['img'] : 'testing.jpg';
+$finfo = new finfo(FILEINFO_MIME);
+$mime = $finfo->file(dirname(__FILE__) . DIRECTORY_SEPARATOR . $imgIn);
+if (substr($mime, 0, 5) != "image") {
+  exit;
+}
 
+$obj = new MemeGenerator($imgIn);
 $upmsg = $_GET['upmsg'];
 $downmsg = $_GET['downmsg'];
 
