@@ -4,7 +4,7 @@ class MemeGenerator {
 
   private $upperText;
   private $lowerText;
-  private $background;
+  private $color;
   private $font = 'impact.ttf';
   private $im;
   private $imgSize;
@@ -44,7 +44,7 @@ class MemeGenerator {
   }
 
   private function ReturnImageFromPath($path) {
-    $ext = pathinfo($path, PATHINFO_EXTENSION);
+    $ext = strtolower(pathinfo($path, PATHINFO_EXTENSION));
 
     if ($ext == 'jpg' || $ext == 'jpeg')
       return imagecreatefromjpeg($path);
@@ -52,28 +52,30 @@ class MemeGenerator {
       return imagecreatefrompng($path);
     else if ($ext == 'gif')
       return imagecreatefromgif($path);
+
+    return false;
   }
 
-  public function __construct($path) {
+  public function __construct($path, $color = array(255, 255, 255)) {
     $this->im = $this->ReturnImageFromPath($path);
-    $this->imgSize = getimagesize($path);
+    if (!$this->im) {
+      return;
+    }
+    $this->imgSize = getimagesize($path); //http://php.net/manual/en/function.getimagesize.php
 
-    $this->background = imagecolorallocate($this->im, rand(0, 255), rand(0, 255), rand(0, 255));
-    imagecolortransparent($this->im, $this->background);
+    $this->color = imagecolorallocate($this->im, $color[0], $color[1], $color[2]);
+    imagecolortransparent($this->im, $this->color);
   }
 
   private function WorkOnImage($text, $size, $type) {
-    $TextHeight = ($type == "upper") ? 35 : $this->imgSize[1] - 20;
+    $TextHeight = ($type == "upper") ? $size + 35 : $this->imgSize[1] - 20;
 
     while (1) {
       //get coordinate for the text
       $coords = $this->GetFontPlacementCoordinates($text, $size);
 
       // place the text in center
-      if ($type == "upper")
-        $UpperTextX = $this->getHorizontalTextAlignment($this->imgSize[0], $coords[4]);
-      else
-        $LowerTextX = $this->getHorizontalTextAlignment($this->imgSize[0], $coords[4]);
+      $TextX = $this->getHorizontalTextAlignment($this->imgSize[0], $coords[4]);
 
       //check if the text does not exceed image width if yes then repeat with size = size - 1
       if ($this->CheckTextWidthExceedImage($this->imgSize[0], $coords[2] - $coords[0])) {
@@ -100,14 +102,36 @@ class MemeGenerator {
         break;
     }
 
-    if ($type == "upper")
-      $this->PlaceTextOnImage($this->im, $size, $UpperTextX, $TextHeight, $this->font, $this->upperText);
-    else
-      $this->PlaceTextOnImage($this->im, $size, $LowerTextX, $TextHeight, $this->font, $this->lowerText);
+    //$this->PlaceTextOnImage($this->im, $size, $TextX, $TextHeight, $this->font, (($type == "upper") ? $this->upperText : $this->lowerText));
+    $this->imagettfstroketext($this->im, $size, $angle = 0, $TextX, $TextHeight, $this->color, $strokecolor = 0, $this->font, (($type == "upper") ? $this->upperText : $this->lowerText), $px = $size / 15);
   }
 
   private function PlaceTextOnImage($img, $fontsize, $Xlocation, $Textheight, $font, $text) {
-    imagettftext($this->im, $fontsize, 0, $Xlocation, $Textheight, (int) $this->background, $font, $text);
+    imagettftext($this->im, $fontsize, 0, $Xlocation, $Textheight, (int) $this->color, $font, $text);
+  }
+
+  /**
+   * Writes the given text with a border into the image using TrueType fonts.
+   * @author John Ciacia
+   * @param image An image resource
+   * @param size The font size
+   * @param angle The angle in degrees to rotate the text
+   * @param x Upper left corner of the text
+   * @param y Lower left corner of the text
+   * @param textcolor This is the color of the main text
+   * @param strokecolor This is the color of the text border
+   * @param fontfile The path to the TrueType font you wish to use
+   * @param text The text string in UTF-8 encoding
+   * @param px Number of pixels the text border will be
+   * @see http://us.php.net/manual/en/function.imagettftext.php
+   */
+  function imagettfstroketext(&$image, $size, $angle, $x, $y, &$textcolor, &$strokecolor, $fontfile, $text, $px) {
+
+    for ($c1 = ($x - abs($px)); $c1 <= ($x + abs($px)); $c1++)
+      for ($c2 = ($y - abs($px)); $c2 <= ($y + abs($px)); $c2++)
+        $bg = imagettftext($image, $size, $angle, $c1, $c2, $strokecolor, $fontfile, $text);
+
+    return imagettftext($image, $size, $angle, $x, $y, $textcolor, $fontfile, $text);
   }
 
   private function ReturnMultipleLinesText($text, $type, $textHeight) {
@@ -154,8 +178,18 @@ class MemeGenerator {
     }
 
     if ($this->upperText != "") {
-      $this->WorkOnImage($this->upperText, 30, "upper");
+      $this->WorkOnImage($this->upperText, $this->imgSize[1] / 20, "upper");
     }
+
+    $maxWidth = 1000;
+    if ($this->imgSize[0] > $maxWidth) {
+      $newHeight = ($this->imgSize[1] / $this->imgSize[0]) * $maxWidth;
+      $tmp = imagecreatetruecolor($maxWidth, $newHeight);
+      imagecopyresampled($tmp, $this->im, 0, 0, 0, 0, $maxWidth, $newHeight, $this->imgSize[0], $this->imgSize[1]);
+      imagedestroy($this->im);
+      $this->im = $tmp;
+    }
+
     imagejpeg($this->im, $imgOut);
     imagedestroy($this->im);
 
@@ -164,6 +198,7 @@ class MemeGenerator {
 
 }
 
+/* EXAMPLE USAGE:
 $imgIn = $_GET['img'] ? $_GET['img'] : 'testing.jpg';
 $finfo = new finfo(FILEINFO_MIME);
 $mime = $finfo->file(dirname(__FILE__) . DIRECTORY_SEPARATOR . $imgIn);
@@ -178,4 +213,4 @@ $downmsg = $_GET['downmsg'];
 $obj->setUpperText($upmsg);
 $obj->setLowerText($downmsg);
 $obj->processImg();
-?>
+*/
